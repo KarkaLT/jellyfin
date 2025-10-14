@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Extensions;
@@ -83,7 +84,9 @@ public class MusicBrainzAlbumProvider : IRemoteMetadataProvider<MusicAlbum, Albu
         if (!string.IsNullOrEmpty(releaseGroupId))
         {
             var releaseGroupResult = await _musicBrainzQuery.LookupReleaseGroupAsync(new Guid(releaseGroupId), Include.Releases, null, cancellationToken).ConfigureAwait(false);
-            return GetReleaseGroupResultAsync(releaseGroupResult.Releases).ToBlockingEnumerable(cancellationToken);
+
+            // No need to pass the cancellation token to GetReleaseGroupResultAsync as we're already passing it to ToBlockingEnumerable
+            return GetReleaseGroupResultAsync(releaseGroupResult.Releases, CancellationToken.None).ToBlockingEnumerable(cancellationToken);
         }
 
         var artistMusicBrainzId = searchInfo.GetMusicBrainzArtistId();
@@ -128,7 +131,7 @@ public class MusicBrainzAlbumProvider : IRemoteMetadataProvider<MusicAlbum, Albu
         }
     }
 
-    private async IAsyncEnumerable<RemoteSearchResult> GetReleaseGroupResultAsync(IEnumerable<IRelease>? releaseSearchResults)
+    private async IAsyncEnumerable<RemoteSearchResult> GetReleaseGroupResultAsync(IEnumerable<IRelease>? releaseSearchResults, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (releaseSearchResults is null)
         {
@@ -138,7 +141,7 @@ public class MusicBrainzAlbumProvider : IRemoteMetadataProvider<MusicAlbum, Albu
         foreach (var result in releaseSearchResults)
         {
             // Fetch full release info, otherwise artists are missing
-            var fullResult = await _musicBrainzQuery.LookupReleaseAsync(result.Id, Include.Artists | Include.ReleaseGroups).ConfigureAwait(false);
+            var fullResult = await _musicBrainzQuery.LookupReleaseAsync(result.Id, Include.Artists | Include.ReleaseGroups, cancellationToken).ConfigureAwait(false);
             yield return GetReleaseResult(fullResult);
         }
     }
